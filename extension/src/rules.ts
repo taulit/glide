@@ -36,6 +36,15 @@ export function isMode(value: unknown): value is Mode {
 /** Matched case-insensitively against the window's app id, WM class and instance. */
 export const DEFAULT_RULES: readonly Rule[] = [
   {
+    // Before the browser rules, so it still holds when those are set to Smart or Classic.
+    name: 'Canvas web apps in the browser',
+    match:
+      '^(firefox|firefox-esr|org\\.mozilla\\.firefox|librewolf|zen|floorp|waterfox|google-chrome(-beta|-unstable)?|com\\.google\\.chrome|chromium(-browser)?|org\\.chromium\\.chromium|brave-browser(-beta|-nightly)?|com\\.brave\\.browser|vivaldi(-stable)?|microsoft-edge(-stable|-beta|-dev)?|opera|thorium-browser|helium)$',
+    title:
+      'Figma|FigJam|Excalidraw|tldraw|Miro|Penpot|draw\\.io|diagrams\\.net|Google Maps|Google Earth|Photopea|Canva|Whimsical|Lucidchart|Onshape|Tinkercad|Krita|Kittl|Framer',
+    mode: 'native',
+  },
+  {
     name: 'Firefox and forks',
     match:
       '^(firefox|firefox-esr|firefox-developer-edition|org\\.mozilla\\.firefox|librewolf|io\\.gitlab\\.librewolf-community|zen|app\\.zen_browser\\.zen|floorp|waterfox|mullvadbrowser|tor-browser)$',

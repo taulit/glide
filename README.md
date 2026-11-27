@@ -35,6 +35,7 @@ The first rule that matches the window under the pointer wins. Rules match the a
 
 | Apps                                                                                         | Mode            | Why                                                                                                       |
 | -------------------------------------------------------------------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------- |
+| Canvas web apps in a browser, by window title (Figma, FigJam, Excalidraw, tldraw, Miro, Penpot, draw.io, Google Maps, Photopea, Canva, …) | App handles it | Middle drag pans the canvas; this holds even when the browser rule is Smart |
 | Firefox and forks (LibreWolf, Zen, Floorp, Waterfox, Tor Browser, Mullvad Browser)           | App handles it  | The browser knows whether you are over a link, a text field or a canvas like Figma or Google Maps          |
 | Chrome, Chromium, Brave, Vivaldi, Edge, Opera, Thorium, Helium                               | App handles it  | Same as Firefox, with `--enable-blink-features=MiddleClickAutoscroll`                                     |
 | LibreOffice                                                                                  | App handles it  | Has its own autoscroll                                                                                    |
@@ -79,7 +80,7 @@ Browsers do autoscroll better than any outside tool, because only they know what
 - Firefox: `general.autoScroll = true` in the `user.js` of each profile.
 - Chrome, Chromium, Brave: `--enable-blink-features=MiddleClickAutoscroll` in `~/.config/<browser>-flags.conf`.
 
-If you would rather have Glide's indicator in the browser too, set the browser rule to Smart or Classic.
+If you would rather have Glide's indicator in the browser too, set the browser rule to Smart or Classic. Canvas web apps such as Figma stay with the browser either way: a rule above the browser rules matches them by window title.
 
 ## Settings
 
