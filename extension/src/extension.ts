@@ -38,8 +38,11 @@ const IFACE_XML = `
   </interface>
 </node>`;
 
-/** Offset (px of virtual cursor travel) beyond which pushing further does nothing. */
-const MAX_OFFSET = 420;
+/**
+ * Offset (px of virtual cursor travel) beyond which pushing further does nothing. Larger than
+ * the distance to most screen edges on purpose: the puck stops at the edge, the speed does not.
+ */
+const MAX_OFFSET = 900;
 
 /** What a middle press does over a window, and why. Also sent to the prefs window. */
 export interface Decision {
@@ -97,9 +100,12 @@ class Session {
     this.seat.inhibit_unfocus();
     this.cursor = global.backend.get_cursor_tracker();
     this.cursor.inhibit_cursor_visibility();
+    // Fullscreen windows can be scanned out directly, without the shell drawing on top: the
+    // indicator would show for a frame and then vanish.
+    global.compositor.disable_unredirect();
 
     this.timeline = new Clutter.Timeline({
-      actor: this.indicator,
+      actor: this.indicator.actor,
       duration: 1000,
       repeat_count: -1,
     });
@@ -169,6 +175,10 @@ class Session {
       global.display.ungrab_accelerator(this.escAction);
       Main.wm.allowKeybinding(this.escName, Shell.ActionMode.NONE);
     }
+    // The cursor comes back where the puck is, the point the hand pulled to.
+    const [x, y] = this.indicator.puckPosition;
+    this.vdev.notify_absolute_motion(GLib.get_monotonic_time(), x, y);
+    global.compositor.enable_unredirect();
     this.cursor.uninhibit_cursor_visibility();
     this.seat.uninhibit_unfocus();
     this.indicator.dismiss();

@@ -12,8 +12,8 @@
 mod shell;
 
 use evdev::{
-    uinput::VirtualDevice, AttributeSet, Device, EventSummary, EventType, InputEvent, KeyCode,
-    RelativeAxisCode, SynchronizationCode,
+    uinput::VirtualDevice, AbsoluteAxisCode, AttributeSet, Device, EventSummary, EventType,
+    InputEvent, KeyCode, RelativeAxisCode, SynchronizationCode, UinputAbsSetup,
 };
 use shell::{Mode, Shell};
 use std::collections::HashSet;
@@ -115,8 +115,12 @@ fn is_mouse(dev: &Device) -> bool {
     let has_motion = dev.supported_relative_axes().is_some_and(|r| {
         r.contains(RelativeAxisCode::REL_X) && r.contains(RelativeAxisCode::REL_Y)
     });
-    // Touchpads and tablets report absolute axes; leave them to libinput.
-    has_middle && has_motion && dev.supported_absolute_axes().is_none()
+    // Touchpads and tablets report absolute positions; leave them to libinput. Other absolute
+    // axes are fine: Logitech receivers add ABS_VOLUME to the mouse node, for example.
+    let has_position = dev.supported_absolute_axes().is_some_and(|a| {
+        a.contains(AbsoluteAxisCode::ABS_X) || a.contains(AbsoluteAxisCode::ABS_Y)
+    });
+    has_middle && has_motion && !has_position
 }
 
 /// One grabbed mouse and its uinput clone.
@@ -139,11 +143,17 @@ impl Pipe {
         {
             rels.insert(r);
         }
-        let out = VirtualDevice::builder()?
-            .name(&format!("{VIRTUAL_PREFIX} ({name})"))
+        let clone_name = format!("{VIRTUAL_PREFIX} ({name})");
+        let mut builder = VirtualDevice::builder()?
+            .name(&clone_name)
             .with_keys(&keys)?
-            .with_relative_axes(&rels)?
-            .build()?;
+            .with_relative_axes(&rels)?;
+        if dev.supported_absolute_axes().is_some() {
+            for (code, info) in dev.get_absinfo()? {
+                builder = builder.with_absolute_axis(&UinputAbsSetup::new(code, info))?;
+            }
+        }
+        let out = builder.build()?;
         dev.grab()?;
         Ok(Self { dev, out })
     }
