@@ -27,6 +27,11 @@ const IFACE_XML = `
       <arg type="s" direction="in" name="kind"/>
       <arg type="b" direction="out" name="started"/>
     </method>
+    <method name="Start">
+      <arg type="s" direction="in" name="kind"/>
+      <arg type="b" direction="out" name="started"/>
+      <arg type="b" direction="out" name="tracked"/>
+    </method>
     <method name="Move">
       <arg type="i" direction="in" name="dx"/>
       <arg type="i" direction="in" name="dy"/>
@@ -52,6 +57,36 @@ export interface Decision {
   reason: string;
 }
 
+function windowAt(x: number, y: number): Meta.Window | null {
+  const actor = global.stage.get_actor_at_pos(Clutter.PickMode.REACTIVE, x, y);
+  for (let a: Clutter.Actor | null = actor; a; a = a.get_parent()) {
+    if (a instanceof Meta.WindowActor) return a.get_meta_window();
+  }
+  return null;
+}
+
+/**
+ * Clients turn the same smooth scroll into very different distances. Measured px per unit
+ * (GNOME 51): Chromium and Electron 12, Firefox 13.2, GTK 3 15.5, GTK 4 only 2.5. GTK 4 apps
+ * (Files, Settings, most of GNOME) are therefore scaled up to match the others. Chromium and
+ * Electron load libgtk-4 too (for dialogs); the V8 snapshot next to their binary tells them
+ * apart.
+ */
+const GTK4_SCROLL_SCALE = 4.8;
+
+function scrollScale(win: Meta.Window | null): number {
+  const pid = win?.get_pid() ?? 0;
+  if (pid <= 0) return 1;
+  try {
+    const dir = GLib.path_get_dirname(GLib.file_read_link(`/proc/${pid}/exe`));
+    if (GLib.file_test(`${dir}/v8_context_snapshot.bin`, GLib.FileTest.EXISTS)) return 1;
+    const [, maps] = GLib.file_get_contents(`/proc/${pid}/maps`);
+    return new TextDecoder().decode(maps).includes('/libgtk-4.so') ? GTK4_SCROLL_SCALE : 1;
+  } catch {
+    return 1;
+  }
+}
+
 function windowIds(win: Meta.Window): string[] {
   const app = Shell.WindowTracker.get_default().get_window_app(win);
   const ids = [
@@ -68,6 +103,8 @@ class Session {
   private readonly sensitivity: number;
   private readonly speed: number;
   private readonly dead: number;
+  /** Toolkit correction for the window under the anchor, see scrollScale. */
+  private readonly scale: number;
   private ox = 0;
   private oy = 0;
   private last = GLib.get_monotonic_time();
@@ -79,17 +116,23 @@ class Session {
   private escAction = Meta.KeyBindingAction.NONE;
   private escName = '';
   private escId = 0;
+  private barriers: Meta.Barrier[] = [];
+  private lastHit = '';
+  /** The session reads the motion from barriers around the anchor, not from Move. */
+  readonly tracked: boolean;
 
   constructor(
     private readonly ext: GlideExtension,
     private readonly vdev: Clutter.VirtualInputDevice,
     settings: Gio.Settings,
     kind: string,
+    track: boolean,
   ) {
     this.sensitivity = settings.get_double('sensitivity');
     this.speed = settings.get_double('speed');
     this.dead = settings.get_int('dead-zone');
     const [ax, ay] = global.get_pointer();
+    this.scale = scrollScale(windowAt(ax, ay));
 
     this.indicator = new Indicator(ax, ay, { sticky: kind === 'sticky', deadZone: this.dead });
 
@@ -112,8 +155,60 @@ class Session {
     this.timeline.connect('new-frame', () => this.frame());
     this.timeline.start();
 
+    this.tracked = track && this.holdCursor(ax, ay);
     this.grabEscape();
     this.overviewId = Main.overview.connect('showing', () => this.ext.stop(true));
+  }
+
+  /**
+   * Boxes the real cursor in at the anchor with four barriers. glided then passes the mouse
+   * motion on as usual, libinput accelerates it like any cursor motion, and Mutter reports
+   * each push against a wall with the full delta: the puck moves exactly as the cursor would.
+   */
+  private holdCursor(ax: number, ay: number): boolean {
+    const D = Meta.BarrierDirection;
+    const wall = (
+      x1: number,
+      y1: number,
+      x2: number,
+      y2: number,
+      letsIn: Meta.BarrierDirection,
+    ) => {
+      const barrier = new Meta.Barrier({
+        backend: global.backend,
+        x1,
+        y1,
+        x2,
+        y2,
+        directions: letsIn,
+      });
+      barrier.connect('hit', (_b, event: Meta.BarrierEvent) => this.onHit(event));
+      this.barriers.push(barrier);
+    };
+    try {
+      wall(ax - 1, ay - 1, ax - 1, ay + 1, D.POSITIVE_X);
+      wall(ax + 1, ay - 1, ax + 1, ay + 1, D.NEGATIVE_X);
+      wall(ax - 1, ay - 1, ax + 1, ay - 1, D.POSITIVE_Y);
+      wall(ax - 1, ay + 1, ax + 1, ay + 1, D.NEGATIVE_Y);
+      return true;
+    } catch (e) {
+      console.warn(`Glide: cannot hold the cursor with barriers, using raw motion: ${e}`);
+      this.releaseCursor();
+      return false;
+    }
+  }
+
+  private onHit(event: Meta.BarrierEvent) {
+    // A push into a corner reaches two walls with the same event.
+    const key = `${event.time} ${event.x} ${event.y} ${event.dx} ${event.dy}`;
+    if (key === this.lastHit) return;
+    this.lastHit = key;
+    this.move(event.dx, event.dy);
+  }
+
+  private releaseCursor() {
+    this.barriers.forEach(b => b.destroy());
+    this.barriers = [];
   }
 
   private grabEscape() {
@@ -158,8 +253,8 @@ class Session {
       // Mutter turns 1.0 of a smooth scroll into 10 px for clients.
       this.vdev.notify_scroll_continuous(
         now,
-        (vx * dt) / 10,
-        (vy * dt) / 10,
+        (vx * dt * this.scale) / 10,
+        (vy * dt * this.scale) / 10,
         Clutter.ScrollSource.CONTINUOUS,
         Clutter.ScrollFinishFlags.NONE,
       );
@@ -169,6 +264,7 @@ class Session {
 
   destroy() {
     this.timeline.stop();
+    this.releaseCursor();
     Main.overview.disconnect(this.overviewId);
     if (this.escId) {
       global.display.disconnect(this.escId);
@@ -249,14 +345,6 @@ export default class GlideExtension extends Extension {
     return { ids, title, mode: isMode(fallback) ? fallback : 'smart', reason: 'default' };
   }
 
-  private windowAt(x: number, y: number): Meta.Window | null {
-    const actor = global.stage.get_actor_at_pos(Clutter.PickMode.REACTIVE, x, y);
-    for (let a: Clutter.Actor | null = actor; a; a = a.get_parent()) {
-      if (a instanceof Meta.WindowActor) return a.get_meta_window();
-    }
-    return null;
-  }
-
   stop(notifyDaemon: boolean): void {
     if (!this.session) return;
     this.session.destroy();
@@ -275,7 +363,7 @@ export default class GlideExtension extends Extension {
       decision = { mode: 'off', reason: 'shell UI is active' };
     } else {
       const [x, y] = global.get_pointer();
-      const win = this.windowAt(x, y);
+      const win = windowAt(x, y);
       decision = win ? this.decide(settings, win) : { mode: 'off', reason: 'not over a window' };
     }
     this.last = { ...decision, at: Date.now() };
@@ -283,15 +371,29 @@ export default class GlideExtension extends Extension {
     return decision.mode;
   }
 
+  /** Older glided: it holds the cursor itself and sends the raw motion with Move. */
   Begin(kind: string): boolean {
+    return this.start(kind, false);
+  }
+
+  /**
+   * Current glided: if `tracked` comes back true, it passes the mouse motion on and the
+   * extension holds the cursor and reads the motion itself.
+   */
+  Start(kind: string): [boolean, boolean] {
+    const started = this.start(kind, true);
+    return [started, started && !!this.session?.tracked];
+  }
+
+  private start(kind: string, track: boolean): boolean {
     this.stop(false);
     if (!this.settings?.get_boolean('enabled') || !this.vdev) return false;
-    this.session = new Session(this, this.vdev, this.settings, kind);
+    this.session = new Session(this, this.vdev, this.settings, kind, track);
     return true;
   }
 
   Move(dx: number, dy: number): void {
-    this.session?.move(dx, dy);
+    if (this.session && !this.session.tracked) this.session.move(dx, dy);
   }
 
   Stick(): void {

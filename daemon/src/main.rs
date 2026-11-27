@@ -251,6 +251,8 @@ struct Machine<'a> {
     swallowed: HashSet<KeyCode>,
     move_dx: i32,
     move_dy: i32,
+    /// The extension reads the motion itself: pass it on instead of collecting it for Move.
+    pass_motion: bool,
     last_move: Instant,
 }
 
@@ -275,6 +277,7 @@ impl<'a> Machine<'a> {
             swallowed: HashSet::new(),
             move_dx: 0,
             move_dy: 0,
+            pass_motion: false,
             last_move: Instant::now(),
         }
     }
@@ -301,9 +304,10 @@ impl<'a> Machine<'a> {
             Kind::StickyArmed => "sticky",
         };
         let gen = self.shell.generation();
-        if !self.shell.begin(label) {
+        let Some(tracked) = self.shell.begin(label) else {
             return false;
-        }
+        };
+        self.pass_motion = tracked;
         self.move_dx = 0;
         self.move_dy = 0;
         self.last_move = Instant::now();
@@ -431,7 +435,9 @@ impl<'a> Machine<'a> {
         let motion = axis == RelativeAxisCode::REL_X || axis == RelativeAxisCode::REL_Y;
         match &mut self.state {
             State::Active { .. } | State::Sticky { .. } if motion => {
-                if axis == RelativeAxisCode::REL_X {
+                if self.pass_motion {
+                    out.push(ev);
+                } else if axis == RelativeAxisCode::REL_X {
                     self.move_dx += value;
                 } else {
                     self.move_dy += value;

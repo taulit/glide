@@ -25,7 +25,7 @@ On Windows a middle press in almost any scrollable view starts autoscroll. On Li
 | Press, pause a moment, release                  | The anchor appears and keeps scrolling until you click                    | The same                                             |
 | Esc, any click, or turning the wheel            | Stops autoscroll (the click is consumed, like on Windows)                 | The same                                             |
 
-While autoscroll runs the cursor turns into the indicator and stays where you pressed, so the view under it keeps scrolling, and a small puck on a rubber band shows where your hand is: the further you pull, the faster it scrolls. Near the anchor is a dead zone that does not scroll. Up, down, left and right work; diagonals too.
+While autoscroll runs the cursor turns into the indicator and stays where you pressed, so the view under it keeps scrolling, and a small puck on a rubber band shows where your hand is: the further you pull, the faster it scrolls. The puck moves with your usual pointer speed, can be pulled past the edge of the screen (then the band keeps growing), and when autoscroll ends the cursor comes back where the puck is. Near the anchor is a dead zone that does not scroll. Up, down, left and right work; diagonals too.
 
 The indicator follows the look of current Linux cursors (dark body, white rim, soft shadow) and takes the accent colour of the system. In click-to-scroll mode it gets an accent ring, so you can tell it keeps going without the button.
 
@@ -98,8 +98,8 @@ The daemon takes `--drag-threshold COUNTS` (12), `--hold-delay-ms MS` (280) and 
 
 GNOME Shell hands mouse buttons straight to Wayland apps, so an extension alone can neither see nor hold back a middle click on an app window. Glide therefore has two halves:
 
-- **`glided`** (Rust, `daemon/`) sits below the compositor. It grabs each mouse through evdev and passes every event on through a uinput clone, unchanged, except the middle button. On a middle press it asks the extension over D-Bus what to do, and while autoscroll runs it holds back the pointer motion (so the cursor stays put) and forwards it as deltas instead. If the extension does not answer within 150 ms, the click passes through.
-- **The extension** (TypeScript for GJS, `extension/`) finds the window under the pointer, applies the rules, draws the indicator and sends smooth scroll events through a Clutter virtual pointer, so apps get the same pixel-precise scrolling as from a touchpad.
+- **`glided`** (Rust, `daemon/`) sits below the compositor. It grabs each mouse through evdev and passes every event on through a uinput clone, unchanged, except the middle button. On a middle press it asks the extension over D-Bus what to do. If the extension does not answer within 150 ms, the click passes through.
+- **The extension** (TypeScript for GJS, `extension/`) finds the window under the pointer, applies the rules, draws the indicator and sends smooth scroll events through a Clutter virtual pointer, so apps get the same pixel-precise scrolling as from a touchpad. While autoscroll runs it boxes the cursor in at the anchor with four pointer barriers: the mouse motion still goes through libinput, so the puck moves with your usual pointer speed and acceleration, and Mutter reports each push against a wall. GTK 4 apps scroll a smooth-scroll step about five times shorter than Chromium, Firefox or GTK 3, so Glide scales the scroll up for them.
 
 Touchpads and tablets are not grabbed.
 

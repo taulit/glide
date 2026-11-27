@@ -67,13 +67,24 @@ impl Shell {
         }
     }
 
-    pub fn begin(&self, kind: &str) -> bool {
-        self.proxy()
-            .and_then(|p| p.call::<_, _, bool>("Begin", &(kind,)))
-            .unwrap_or_else(|e| {
-                eprintln!("glided: Begin failed: {e}");
-                false
-            })
+    /// Starts autoscroll. `None` if it did not start, otherwise whether the extension reads
+    /// the mouse motion itself (then the motion must reach the compositor as usual).
+    pub fn begin(&self, kind: &str) -> Option<bool> {
+        let start = self
+            .proxy()
+            .and_then(|p| p.call::<_, _, (bool, bool)>("Start", &(kind,)));
+        let result = match start {
+            Ok((started, tracked)) => Ok(started.then_some(tracked)),
+            // An older extension without Start: it takes the raw motion through Move.
+            Err(_) => self
+                .proxy()
+                .and_then(|p| p.call::<_, _, bool>("Begin", &(kind,)))
+                .map(|started| started.then_some(false)),
+        };
+        result.unwrap_or_else(|e| {
+            eprintln!("glided: Begin failed: {e}");
+            None
+        })
     }
 
     pub fn moved(&self, dx: i32, dy: i32) {

@@ -12,7 +12,6 @@ import {
   ANCHOR_R,
   type AnchorState,
   BAND_H,
-  PUCK_R,
   PUCK_SIZE,
   anchorSize,
   paintAnchor,
@@ -31,27 +30,22 @@ export interface IndicatorOptions {
   deadZone: number;
 }
 
-interface Bounds {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
+interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
-/** Where the puck may go: the monitor under the anchor, so it stays visible at the edges. */
-function monitorBounds(x: number, y: number): Bounds {
-  const m =
+/** The monitor under the anchor: the indicator is clipped to it, the cursor stays on it. */
+function monitorAt(x: number, y: number): Rect | null {
+  return (
     Main.layoutManager.monitors.find(
-      mon => x >= mon.x && x < mon.x + mon.width && y >= mon.y && y < mon.y + mon.height,
-    ) ?? Main.layoutManager.primaryMonitor;
-  const inset = PUCK_R + 2;
-  if (!m) return { x1: -Infinity, y1: -Infinity, x2: Infinity, y2: Infinity };
-  return {
-    x1: m.x + inset,
-    y1: m.y + inset,
-    x2: m.x + m.width - inset,
-    y2: m.y + m.height - inset,
-  };
+      m => x >= m.x && x < m.x + m.width && y >= m.y && y < m.y + m.height,
+    ) ??
+    Main.layoutManager.primaryMonitor ??
+    null
+  );
 }
 
 function repaintWith(
@@ -70,7 +64,7 @@ export class Indicator {
   private readonly anchor: St.DrawingArea;
   private readonly band: St.DrawingArea;
   private readonly puck: St.DrawingArea;
-  private readonly bounds: Bounds;
+  private readonly monitor: Rect | null;
   private readonly state: AnchorState;
   private px: number;
   private py: number;
@@ -85,7 +79,7 @@ export class Indicator {
   ) {
     this.px = ax;
     this.py = ay;
-    this.bounds = monitorBounds(ax, ay);
+    this.monitor = monitorAt(ax, ay);
     this.state = {
       dx: 0,
       dy: 0,
@@ -137,6 +131,11 @@ export class Indicator {
     this.group.add_child(this.band);
     this.group.add_child(this.anchor);
     this.group.add_child(this.puck);
+    // Past the edge of its monitor the puck goes out of sight instead of onto the next one.
+    if (this.monitor) {
+      const m = this.monitor;
+      this.group.set_clip(m.x, m.y, m.width, m.height);
+    }
     Main.uiGroup.add_child(this.group);
     Main.uiGroup.set_child_above_sibling(this.group, null);
 
@@ -154,9 +153,18 @@ export class Indicator {
     return this.group;
   }
 
-  /** Where the puck is on the stage; the cursor goes there when autoscroll ends. */
+  /**
+   * Where the cursor goes when autoscroll ends: where the puck is, or the edge of the monitor
+   * when the puck went past it.
+   */
   get puckPosition(): [number, number] {
-    return this.state.resting ? [this.ax, this.ay] : [this.px, this.py];
+    if (this.state.resting) return [this.ax, this.ay];
+    const m = this.monitor;
+    if (!m) return [this.px, this.py];
+    return [
+      Math.min(m.x + m.width - 1, Math.max(m.x, this.px)),
+      Math.min(m.y + m.height - 1, Math.max(m.y, this.py)),
+    ];
   }
 
   setSticky(sticky: boolean): void {
@@ -177,11 +185,10 @@ export class Indicator {
     }
     this.energy = Math.min(1, Math.hypot(vx, vy) / FULL_ENERGY);
 
-    // The puck follows the hand one to one, but stops at the edge of the monitor; the offset
-    // behind it keeps growing, so pulling further still scrolls faster.
-    const b = this.bounds;
-    this.px = Math.min(b.x2, Math.max(b.x1, this.ax + ox));
-    this.py = Math.min(b.y2, Math.max(b.y1, this.ay + oy));
+    // The puck follows the hand one to one, also past the edge of the monitor: then only the
+    // band shows, and it keeps getting longer as pulling further scrolls faster.
+    this.px = this.ax + ox;
+    this.py = this.ay + oy;
 
     this.puck.visible = !resting;
     if (!resting) {
