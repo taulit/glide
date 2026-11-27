@@ -1,0 +1,28 @@
+{
+  "name": "glide-extension",
+  "version": "0.1.0",
+  "description": "Middle-click autoscroll for GNOME: the GNOME Shell extension",
+  "private": true,
+  "type": "module",
+  "license": "GPL-2.0-or-later",
+  "packageManager": "pnpm@12.23.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "bash scripts/build.sh",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@girs/gjs": "^4.1.0",
+    "@girs/gnome-shell": "51.0.1",
+    "eslint": "^9.0.0",
+    "globals": "^16.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.0.0",
+    "typescript-eslint": "^8.0.0"
+  }
+}

@@ -36,11 +36,16 @@ install_daemon() {
 }
 
 install_extension() {
+    say "Building the extension (TypeScript)"
+    if ! command -v pnpm >/dev/null; then
+        echo "  ! pnpm is missing: install Node 24 or newer, then: corepack enable pnpm"
+        exit 1
+    fi
+    (cd "$here/extension" && pnpm install --frozen-lockfile --silent && pnpm --silent build)
     say "Installing extension to $ext_dir"
-    mkdir -p "$ext_dir/schemas"
-    cp "$here"/extension/{metadata.json,extension.js,indicator.js,paint.js,rules.js,prefs.js,stylesheet.css} "$ext_dir/"
-    cp "$here"/extension/schemas/*.xml "$ext_dir/schemas/"
-    glib-compile-schemas "$ext_dir/schemas"
+    rm -rf "$ext_dir"
+    mkdir -p "$ext_dir"
+    cp -r "$here"/extension/build/. "$ext_dir/"
     if gnome-extensions enable "$uuid" 2>/dev/null; then
         echo "  enabled"
     else

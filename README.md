@@ -2,7 +2,7 @@
 
 Middle-click autoscroll for GNOME, like on Windows: press the middle mouse button, move the mouse up or down, and the page scrolls by itself, faster the further you move. A plain middle click stays a middle click, and apps where middle drag means something else (Figma, Blender, CAD, games, remote desktops) are left alone.
 
-![Glide autoscrolling in Firefox, Files, Text Editor and a wide table, then the per-app rules](docs/media/demo.webp)
+![Glide autoscrolling in Firefox, Files, Text Editor and a wide table, then the per-app rules](docs/media/demo.avif)
 
 [Website](https://taulit.github.io/glide/) · [Full-quality video](https://taulit.github.io/glide/media/glide-demo.mp4) · [Install](#install)
 
@@ -25,7 +25,7 @@ On Windows a middle press in almost any scrollable view starts autoscroll. On Li
 | Press, pause a moment, release                  | The anchor appears and keeps scrolling until you click                    | The same                                             |
 | Esc, any click, or turning the wheel            | Stops autoscroll (the click is consumed, like on Windows)                 | The same                                             |
 
-While autoscroll runs the cursor stays where you pressed, so the view under it keeps scrolling, and a small puck on a rubber band shows where your hand is: the further you pull, the faster it scrolls. Near the anchor is a dead zone that does not scroll. Up, down, left and right work; diagonals too.
+While autoscroll runs the cursor turns into the indicator and stays where you pressed, so the view under it keeps scrolling, and a small puck on a rubber band shows where your hand is: the further you pull, the faster it scrolls. Near the anchor is a dead zone that does not scroll. Up, down, left and right work; diagonals too.
 
 The indicator follows the look of current Linux cursors (dark body, white rim, soft shadow) and takes the accent colour of the system. In click-to-scroll mode it gets an accent ring, so you can tell it keeps going without the button.
 
@@ -55,7 +55,7 @@ On the Apps page of the settings every open window is listed with what a middle 
 
 > Glide is new (0.1). The extension, the rules and the scrolling are tested in a sandboxed GNOME Shell 51, the daemon is built and linted in CI. Reports from real mice and setups are very welcome in the [issues](https://github.com/taulit/glide/issues).
 
-Requirements: GNOME Shell 49, 50 or 51 on Wayland, Rust (cargo), and read access to the mice plus write access to `/dev/uinput`.
+Requirements: GNOME Shell 49, 50 or 51 on Wayland, Rust (cargo), Node 24 or newer with pnpm, and read access to the mice plus write access to `/dev/uinput`.
 
 ```sh
 git clone https://github.com/taulit/glide && cd glide
@@ -63,7 +63,7 @@ git clone https://github.com/taulit/glide && cd glide
 ./install.sh --browsers # also switches on the browsers' own autoscroll
 ```
 
-The installer builds the daemon, installs it as the systemd user service `glided`, copies the extension and enables it. It checks the permissions first and prints what is missing. Usually that is:
+The installer builds the daemon and the extension, installs the daemon as the systemd user service `glided`, copies the extension and enables it. It checks the permissions first and prints what is missing. Usually that is:
 
 ```sh
 sudo usermod -aG input $USER
@@ -99,7 +99,7 @@ The daemon takes `--drag-threshold COUNTS` (12), `--hold-delay-ms MS` (280) and 
 GNOME Shell hands mouse buttons straight to Wayland apps, so an extension alone can neither see nor hold back a middle click on an app window. Glide therefore has two halves:
 
 - **`glided`** (Rust, `daemon/`) sits below the compositor. It grabs each mouse through evdev and passes every event on through a uinput clone, unchanged, except the middle button. On a middle press it asks the extension over D-Bus what to do, and while autoscroll runs it holds back the pointer motion (so the cursor stays put) and forwards it as deltas instead. If the extension does not answer within 150 ms, the click passes through.
-- **The extension** (GJS, `extension/`) finds the window under the pointer, applies the rules, draws the indicator and sends smooth scroll events through a Clutter virtual pointer, so apps get the same pixel-precise scrolling as from a touchpad.
+- **The extension** (TypeScript for GJS, `extension/`) finds the window under the pointer, applies the rules, draws the indicator and sends smooth scroll events through a Clutter virtual pointer, so apps get the same pixel-precise scrolling as from a touchpad.
 
 Touchpads and tablets are not grabbed.
 
@@ -124,7 +124,7 @@ Things that would fit the same gesture, not built yet:
 | Path | What |
 | --- | --- |
 | `daemon/` | `glided`, Rust: `cargo build --release`, `cargo clippy` |
-| `extension/` | The GNOME Shell extension, plain GJS modules, no build step |
+| `extension/` | The GNOME Shell extension, TypeScript: `pnpm install && pnpm build` (into `build/`), `pnpm lint`, `pnpm typecheck` |
 | `site/` | The website ([taulit.github.io/glide](https://taulit.github.io/glide/)), Astro: `pnpm install && pnpm dev` |
 | `docs/` | Screenshots and the demo used in this file |
 

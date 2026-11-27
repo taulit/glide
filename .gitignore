@@ -3,5 +3,6 @@ node_modules/
 site/dist/
 site/.astro/
 extension/schemas/gschemas.compiled
+extension/build/
 *.zip
 .DS_Store

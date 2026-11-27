@@ -79,7 +79,7 @@ const jsonLd = [
     thumbnailUrl: `${site}media/glide-demo-poster.jpg`,
     contentUrl: `${site}media/glide-demo.mp4`,
     uploadDate: '2026-11-27',
-    duration: 'PT28S',
+    duration: 'PT30S',
   },
 ];
 
@@ -191,7 +191,7 @@ const rules = [
           </article>
         </div>
         <p class="note">
-          The indicator follows the look of modern Linux cursors: a dark body with a white rim, the accent colour of your
+          While it scrolls, the cursor turns into the indicator. It follows the look of modern Linux cursors: a dark body with a white rim, the accent colour of your
           system, and a small puck on a rubber band that shows how far, and so how fast, you pulled.
         </p>
       </section>
@@ -217,7 +217,7 @@ const rules = [
 
       <section id="install" class="band">
         <h2>Install</h2>
-        <p>You need GNOME Shell 49, 50 or 51 on Wayland and Rust (cargo).</p>
+        <p>You need GNOME Shell 49, 50 or 51 on Wayland, Rust (cargo) and Node 24 or newer with pnpm.</p>
         <pre><code>git clone https://github.com/taulit/glide
 cd glide
 ./install.sh --browsers</code></pre>
