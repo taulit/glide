@@ -65,28 +65,6 @@ function windowAt(x: number, y: number): Meta.Window | null {
   return null;
 }
 
-/**
- * Clients turn the same smooth scroll into very different distances. Measured px per unit
- * (GNOME 51): Chromium and Electron 12, Firefox 13.2, GTK 3 15.5, GTK 4 only 2.5. GTK 4 apps
- * (Files, Settings, most of GNOME) are therefore scaled up to match the others. Chromium and
- * Electron load libgtk-4 too (for dialogs); the V8 snapshot next to their binary tells them
- * apart.
- */
-const GTK4_SCROLL_SCALE = 4.8;
-
-function scrollScale(win: Meta.Window | null): number {
-  const pid = win?.get_pid() ?? 0;
-  if (pid <= 0) return 1;
-  try {
-    const dir = GLib.path_get_dirname(GLib.file_read_link(`/proc/${pid}/exe`));
-    if (GLib.file_test(`${dir}/v8_context_snapshot.bin`, GLib.FileTest.EXISTS)) return 1;
-    const [, maps] = GLib.file_get_contents(`/proc/${pid}/maps`);
-    return new TextDecoder().decode(maps).includes('/libgtk-4.so') ? GTK4_SCROLL_SCALE : 1;
-  } catch {
-    return 1;
-  }
-}
-
 function windowIds(win: Meta.Window): string[] {
   const app = Shell.WindowTracker.get_default().get_window_app(win);
   const ids = [
@@ -103,8 +81,6 @@ class Session {
   private readonly sensitivity: number;
   private readonly speed: number;
   private readonly dead: number;
-  /** Toolkit correction for the window under the anchor, see scrollScale. */
-  private readonly scale: number;
   private ox = 0;
   private oy = 0;
   private last = GLib.get_monotonic_time();
@@ -132,7 +108,6 @@ class Session {
     this.speed = settings.get_double('speed');
     this.dead = settings.get_int('dead-zone');
     const [ax, ay] = global.get_pointer();
-    this.scale = scrollScale(windowAt(ax, ay));
 
     this.indicator = new Indicator(ax, ay, { sticky: kind === 'sticky', deadZone: this.dead });
 
@@ -255,12 +230,15 @@ class Session {
     const vx = this.velocity(this.ox);
     const vy = this.velocity(this.oy);
     if (vx || vy) {
-      // Mutter turns 1.0 of a smooth scroll into 10 px for clients.
+      // Smooth wheel scrolling, not touchpad (CONTINUOUS or FINGER): browsers turn a sideways
+      // touchpad scroll at the edge of a page into the back/forward swipe, and the clients agree
+      // much better on wheel distances (measured px per unit: GTK 3 and 4 9.5, Chromium 12,
+      // Firefox 12.9; as touchpad scroll GTK 4 moved only 2.5). 1.0 is about 10 px.
       this.vdev.notify_scroll_continuous(
         now,
-        (vx * dt * this.scale) / 10,
-        (vy * dt * this.scale) / 10,
-        Clutter.ScrollSource.CONTINUOUS,
+        (vx * dt) / 10,
+        (vy * dt) / 10,
+        Clutter.ScrollSource.WHEEL,
         Clutter.ScrollFinishFlags.NONE,
       );
     }
