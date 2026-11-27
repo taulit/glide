@@ -25,6 +25,9 @@ type Ease = Parameters<Clutter.Actor['ease']>[0];
 /** Speed (px/s) at which the band and the puck core are at full strength. */
 const FULL_ENERGY = 4000;
 
+/** How far inside the monitor edge the cursor comes back when the puck went past it, px. */
+const EDGE_INSET = 24;
+
 export interface IndicatorOptions {
   sticky: boolean;
   deadZone: number;
@@ -154,17 +157,18 @@ export class Indicator {
   }
 
   /**
-   * Where the cursor goes when autoscroll ends: where the puck is, or the edge of the monitor
-   * when the puck went past it.
+   * Where the cursor goes when autoscroll ends: where the puck is, or just inside the edge of
+   * the monitor when the puck went past it. Not on the edge itself: the hand is usually still
+   * moving outwards, and at the edge that would push into the dock's pressure barrier or a hot
+   * corner.
    */
   get puckPosition(): [number, number] {
     if (this.state.resting) return [this.ax, this.ay];
     const m = this.monitor;
     if (!m) return [this.px, this.py];
-    return [
-      Math.min(m.x + m.width - 1, Math.max(m.x, this.px)),
-      Math.min(m.y + m.height - 1, Math.max(m.y, this.py)),
-    ];
+    const clamp = (v: number, lo: number, size: number) =>
+      v < lo || v >= lo + size ? Math.min(lo + size - EDGE_INSET, Math.max(lo + EDGE_INSET, v)) : v;
+    return [clamp(this.px, m.x, m.width), clamp(this.py, m.y, m.height)];
   }
 
   setSticky(sticky: boolean): void {
