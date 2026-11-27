@@ -99,6 +99,14 @@ impl Shell {
         }
     }
 
+    /// Keeps the session alive. `Some(false)` if the extension has no session any more;
+    /// `None` if it did not answer (its own lease then lets the cursor go).
+    pub fn alive(&self) -> Option<bool> {
+        self.proxy()
+            .and_then(|p| p.call::<_, _, bool>("Alive", &()))
+            .ok()
+    }
+
     pub fn end(&self) {
         if let Ok(p) = self.proxy() {
             let _ = p.call_noreply("End", &());

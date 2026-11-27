@@ -3,7 +3,7 @@
 // Mutter hands pointer buttons directly to Wayland clients, so this extension cannot catch a
 // middle click on an app by itself. The companion daemon (glided) grabs the mice, asks us via
 // D-Bus what a middle press over the current window should do (Query), and while autoscroll
-// runs it freezes the cursor and forwards mouse motion (Move). We pick the rule, draw the
+// runs it keeps the session alive (Alive) and passes the mouse motion on. We pick the rule, draw the
 // indicator and emit smooth scroll events through a Clutter virtual pointer.
 
 import Clutter from 'gi://Clutter';
@@ -37,6 +37,7 @@ const IFACE_XML = `
       <arg type="i" direction="in" name="dy"/>
     </method>
     <method name="Stick"/>
+    <method name="Alive"><arg type="b" direction="out" name="scrolling"/></method>
     <method name="End"/>
     <method name="Describe"><arg type="s" direction="out" name="json"/></method>
     <signal name="Ended"/>
@@ -77,6 +78,13 @@ function windowIds(win: Meta.Window): string[] {
   return [...new Set(ids)];
 }
 
+/**
+ * How long a session tracked by glided lives without hearing from it, µs. glided renews it
+ * several times a second; if it stops (crashed, restarted, out of step), the cursor is never
+ * held for longer than this.
+ */
+const LEASE = 1_500_000;
+
 class Session {
   private readonly sensitivity: number;
   private readonly speed: number;
@@ -85,29 +93,28 @@ class Session {
   private oy = 0;
   private last = GLib.get_monotonic_time();
   private readonly indicator: Indicator;
-  private readonly seat: Clutter.Seat;
-  private readonly cursor: Meta.CursorTracker;
-  private readonly timeline: Clutter.Timeline;
-  private readonly overviewId: number;
-  private escAction = Meta.KeyBindingAction.NONE;
-  private escName = '';
-  private escId = 0;
-  private barriers: Meta.Barrier[] = [];
-  private lastHit = '';
+  private readonly vdev: Clutter.VirtualInputDevice;
   private readonly ax: number;
   private readonly ay: number;
+  /** Undo steps for everything the session took over, run in reverse by destroy(). */
+  private readonly undo: (() => void)[] = [];
+  private barriers: Meta.Barrier[] = [];
+  private lastHit = '';
   /** Until when the pointer may still be on its way back from a warp, µs. */
   private warpUntil = 0;
+  private leaseUntil = 0;
+  private destroyed = false;
   /** The session reads the motion from barriers around the anchor, not from Move. */
   readonly tracked: boolean;
 
   constructor(
     private readonly ext: GlideExtension,
-    private readonly vdev: Clutter.VirtualInputDevice,
+    vdev: Clutter.VirtualInputDevice,
     settings: Gio.Settings,
     kind: string,
     track: boolean,
   ) {
+    this.vdev = vdev;
     this.sensitivity = settings.get_double('sensitivity');
     this.speed = settings.get_double('speed');
     this.dead = settings.get_int('dead-zone');
@@ -115,30 +122,48 @@ class Session {
     this.ax = ax;
     this.ay = ay;
 
-    this.indicator = new Indicator(ax, ay, { sticky: kind === 'sticky', deadZone: this.dead });
+    // Whatever fails halfway, nothing the session took over may stay taken.
+    try {
+      this.indicator = new Indicator(ax, ay, { sticky: kind === 'sticky', deadZone: this.dead });
+      this.undo.push(() => this.indicator.dismiss());
 
-    // The indicator takes the place of the cursor. Hiding the cursor alone would also take
-    // pointer focus away from the window, and with it the scroll events: Mutter keeps the
-    // focus while the seat's unfocus is inhibited, so that comes first.
-    this.seat = global.stage.context.get_backend().get_default_seat();
-    this.seat.inhibit_unfocus();
-    this.cursor = global.backend.get_cursor_tracker();
-    this.cursor.inhibit_cursor_visibility();
-    // Fullscreen windows can be scanned out directly, without the shell drawing on top: the
-    // indicator would show for a frame and then vanish.
-    global.compositor.disable_unredirect();
+      // The indicator takes the place of the cursor. Hiding the cursor alone would also take
+      // pointer focus away from the window, and with it the scroll events: Mutter keeps the
+      // focus while the seat's unfocus is inhibited, so that comes first.
+      const seat = global.stage.context.get_backend().get_default_seat();
+      seat.inhibit_unfocus();
+      this.undo.push(() => seat.uninhibit_unfocus());
+      const cursor = global.backend.get_cursor_tracker();
+      cursor.inhibit_cursor_visibility();
+      this.undo.push(() => cursor.uninhibit_cursor_visibility());
+      // Before the cursor shows again (and after the barriers are gone): it comes back where
+      // the puck is, the point the hand pulled to.
+      this.undo.push(() =>
+        this.vdev.notify_absolute_motion(GLib.get_monotonic_time(), ...this.indicator.puckPosition),
+      );
+      // Fullscreen windows can be scanned out directly, without the shell drawing on top: the
+      // indicator would show for a frame and then vanish.
+      global.compositor.disable_unredirect();
+      this.undo.push(() => global.compositor.enable_unredirect());
 
-    this.timeline = new Clutter.Timeline({
-      actor: this.indicator.actor,
-      duration: 1000,
-      repeat_count: -1,
-    });
-    this.timeline.connect('new-frame', () => this.frame());
-    this.timeline.start();
+      const timeline = new Clutter.Timeline({
+        actor: this.indicator.actor,
+        duration: 1000,
+        repeat_count: -1,
+      });
+      timeline.connect('new-frame', () => this.frame());
+      timeline.start();
+      this.undo.push(() => timeline.stop());
 
-    this.tracked = track && this.holdCursor(ax, ay);
-    this.grabEscape();
-    this.overviewId = Main.overview.connect('showing', () => this.ext.stop(true));
+      this.tracked = track && this.holdCursor(ax, ay);
+      this.renew();
+      this.grabEscape();
+      const overviewId = Main.overview.connect('showing', () => this.ext.stop(true));
+      this.undo.push(() => Main.overview.disconnect(overviewId));
+    } catch (e) {
+      this.destroy();
+      throw e;
+    }
   }
 
   /**
@@ -152,6 +177,10 @@ class Session {
    */
   private holdCursor(ax: number, ay: number): boolean {
     const D = Meta.BarrierDirection;
+    this.undo.push(() => {
+      this.barriers.forEach(b => b.destroy());
+      this.barriers = [];
+    });
     const wall = (
       x1: number,
       y1: number,
@@ -179,7 +208,8 @@ class Session {
       return true;
     } catch (e) {
       console.warn(`Glide: cannot hold the cursor with barriers, using raw motion: ${e}`);
-      this.releaseCursor();
+      this.barriers.forEach(b => b.destroy());
+      this.barriers = [];
       return false;
     }
   }
@@ -209,19 +239,24 @@ class Session {
     this.warpUntil = now + 50_000;
   }
 
-  private releaseCursor() {
-    this.barriers.forEach(b => b.destroy());
-    this.barriers = [];
+  private grabEscape() {
+    const action = global.display.grab_accelerator('Escape', Meta.KeyBindingFlags.NONE);
+    if (action === Meta.KeyBindingAction.NONE) return;
+    const name = Meta.external_binding_name_for_action(action);
+    Main.wm.allowKeybinding(name, Shell.ActionMode.ALL);
+    const id = global.display.connect('accelerator-activated', (_d, a) => {
+      if (a === action) this.ext.stop(true);
+    });
+    this.undo.push(() => {
+      global.display.disconnect(id);
+      global.display.ungrab_accelerator(action);
+      Main.wm.allowKeybinding(name, Shell.ActionMode.NONE);
+    });
   }
 
-  private grabEscape() {
-    this.escAction = global.display.grab_accelerator('Escape', Meta.KeyBindingFlags.NONE);
-    if (this.escAction === Meta.KeyBindingAction.NONE) return;
-    this.escName = Meta.external_binding_name_for_action(this.escAction);
-    Main.wm.allowKeybinding(this.escName, Shell.ActionMode.ALL);
-    this.escId = global.display.connect('accelerator-activated', (_d, action) => {
-      if (action === this.escAction) this.ext.stop(true);
-    });
+  /** glided is still there and still scrolling. */
+  renew() {
+    this.leaseUntil = GLib.get_monotonic_time() + LEASE;
   }
 
   move(dx: number, dy: number) {
@@ -247,6 +282,11 @@ class Session {
 
   private frame() {
     const now = GLib.get_monotonic_time();
+    if (this.tracked && now > this.leaseUntil) {
+      console.warn('Glide: lost glided during autoscroll, letting the cursor go');
+      this.ext.stop(true);
+      return;
+    }
     const dt = Math.min(0.05, (now - this.last) / 1e6);
     this.last = now;
     this.keepHeld(now);
@@ -270,21 +310,16 @@ class Session {
   }
 
   destroy() {
-    this.timeline.stop();
-    this.releaseCursor();
-    Main.overview.disconnect(this.overviewId);
-    if (this.escId) {
-      global.display.disconnect(this.escId);
-      global.display.ungrab_accelerator(this.escAction);
-      Main.wm.allowKeybinding(this.escName, Shell.ActionMode.NONE);
+    if (this.destroyed) return;
+    this.destroyed = true;
+    // Each step on its own: one that throws must not keep the rest (cursor, barriers) taken.
+    for (const step of this.undo.reverse()) {
+      try {
+        step();
+      } catch (e) {
+        console.error(`Glide: cleanup failed: ${e}`);
+      }
     }
-    // The cursor comes back where the puck is, the point the hand pulled to.
-    const [x, y] = this.indicator.puckPosition;
-    this.vdev.notify_absolute_motion(GLib.get_monotonic_time(), x, y);
-    global.compositor.enable_unredirect();
-    this.cursor.uninhibit_cursor_visibility();
-    this.seat.uninhibit_unfocus();
-    this.indicator.dismiss();
   }
 }
 
@@ -326,7 +361,7 @@ export default class GlideExtension extends Extension {
   }
 
   override disable(): void {
-    this.stop(false);
+    this.stop(true);
     this.dbus?.unexport();
     this.dbus = null;
     Gio.bus_unwatch_name(this.watchId);
@@ -395,16 +430,32 @@ export default class GlideExtension extends Extension {
   private start(kind: string, track: boolean): boolean {
     this.stop(false);
     if (!this.settings?.get_boolean('enabled') || !this.vdev) return false;
-    this.session = new Session(this, this.vdev, this.settings, kind, track);
-    return true;
+    try {
+      this.session = new Session(this, this.vdev, this.settings, kind, track);
+      return true;
+    } catch (e) {
+      console.error(`Glide: cannot start autoscroll: ${e}`);
+      return false;
+    }
   }
 
   Move(dx: number, dy: number): void {
+    this.session?.renew();
     if (this.session && !this.session.tracked) this.session.move(dx, dy);
   }
 
   Stick(): void {
+    this.session?.renew();
     this.session?.stick();
+  }
+
+  /**
+   * glided calls this several times a second while it scrolls. Without it a tracked session
+   * lets the cursor go; false tells glided the session is gone.
+   */
+  Alive(): boolean {
+    this.session?.renew();
+    return !!this.session;
   }
 
   End(): void {

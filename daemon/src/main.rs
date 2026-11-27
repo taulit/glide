@@ -37,6 +37,9 @@ struct Tuning {
     move_interval: Duration,
 }
 
+/// How often a running autoscroll tells the extension that glided is still there.
+const ALIVE_INTERVAL: Duration = Duration::from_millis(300);
+
 fn main() {
     let tuning = parse_args();
     let shell = Arc::new(Shell::connect().unwrap_or_else(|e| {
@@ -254,6 +257,7 @@ struct Machine<'a> {
     /// The extension reads the motion itself: pass it on instead of collecting it for Move.
     pass_motion: bool,
     last_move: Instant,
+    last_alive: Instant,
 }
 
 fn key(code: KeyCode, value: i32) -> InputEvent {
@@ -279,6 +283,7 @@ impl<'a> Machine<'a> {
             move_dy: 0,
             pass_motion: false,
             last_move: Instant::now(),
+            last_alive: Instant::now(),
         }
     }
 
@@ -311,6 +316,7 @@ impl<'a> Machine<'a> {
         self.move_dx = 0;
         self.move_dy = 0;
         self.last_move = Instant::now();
+        self.last_alive = Instant::now();
         self.state = State::Active {
             kind,
             since: Instant::now(),
@@ -499,6 +505,18 @@ impl<'a> Machine<'a> {
                 self.move_dx = 0;
                 self.move_dy = 0;
                 self.state = State::Idle;
+            }
+            State::Active { .. } | State::Sticky { .. }
+                if self.last_alive.elapsed() >= ALIVE_INTERVAL =>
+            {
+                // The extension lets the cursor go when this stops; and if it has no session
+                // any more, we must not keep acting as if it had.
+                self.last_alive = Instant::now();
+                if self.shell.alive() == Some(false) {
+                    self.move_dx = 0;
+                    self.move_dy = 0;
+                    self.state = State::Idle;
+                }
             }
             State::Active { .. } | State::Sticky { .. }
                 if self.last_move.elapsed() >= self.t.move_interval =>
