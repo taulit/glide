@@ -1,0 +1,7 @@
+daemon/target/
+node_modules/
+site/dist/
+site/.astro/
+extension/schemas/gschemas.compiled
+*.zip
+.DS_Store

@@ -1,0 +1,9 @@
+{
+  "uuid": "glide@taulit.github.io",
+  "name": "Glide",
+  "description": "Middle-click autoscroll like on Windows, but smarter: per-app rules, a click stays a click, and an indicator that fits your cursor. Needs the glided daemon.",
+  "shell-version": ["49", "50", "51"],
+  "settings-schema": "org.gnome.shell.extensions.glide",
+  "url": "https://github.com/taulit/glide",
+  "version-name": "0.1.0"
+}

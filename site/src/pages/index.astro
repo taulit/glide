@@ -1,0 +1,343 @@
+---
+const base = import.meta.env.BASE_URL; // '/glide/'
+const site = 'https://taulit.github.io/glide/';
+const repo = 'https://github.com/taulit/glide';
+
+const title = 'Glide: middle-click autoscroll for GNOME and Linux (Wayland)';
+const description =
+  'Glide brings Windows-style middle-click autoscroll to GNOME on Wayland: press the middle mouse button, move the mouse, and any app scrolls. A click stays a click, and Figma, Blender, games and remote desktops are left alone. Free and open source.';
+
+const faq = [
+  {
+    q: 'Does GNOME have middle-click autoscroll?',
+    a: 'No. GNOME and GTK have no autoscroll, Firefox ships it switched off on Linux and Chromium hides it behind a flag. Glide adds it to the whole desktop.',
+  },
+  {
+    q: 'Does it work on Wayland?',
+    a: 'Yes, Glide is built for GNOME on Wayland. A small daemon reads the mouse below the compositor and a GNOME Shell extension draws the indicator and sends smooth scroll events, so every Wayland and XWayland app scrolls.',
+  },
+  {
+    q: 'Will it break middle-click paste or opening links in a new tab?',
+    a: 'No. In the default Smart mode a short middle click is passed on unchanged: paste, open in new tab and close tab keep working. Autoscroll starts only when you hold the button and move, or press and pause.',
+  },
+  {
+    q: 'Is it the same as autoscroll on Windows?',
+    a: 'It works the same way: press the middle button, move away from the anchor, and the speed grows with the distance. Classic mode copies Windows exactly. Glide adds per-app rules so apps that use middle drag for something else are not disturbed.',
+  },
+  {
+    q: 'What about Figma, Blender, CAD tools and games?',
+    a: 'They are left alone. Design tools, 3D and CAD apps, code editors with box selection, remote desktops, virtual machines and games use middle drag themselves, so the built-in rules turn Glide off there. Fullscreen windows are skipped too.',
+  },
+  {
+    q: 'Does it work in Firefox and Chrome?',
+    a: 'Browsers know whether the pointer is over a link, a text field or a web app like Figma, so by default Glide lets them use their own autoscroll and the installer switches it on. You can also give browsers Glide’s indicator with one rule.',
+  },
+  {
+    q: 'Which GNOME versions are supported?',
+    a: 'GNOME Shell 49, 50 and 51. Touchpads and tablets are not touched, only mice.',
+  },
+  {
+    q: 'Is Glide free?',
+    a: 'Yes. Glide is free software under the GPL 2.0 or later, without accounts, telemetry or network access.',
+  },
+];
+
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Glide',
+    alternateName: 'Glide autoscroll for GNOME',
+    applicationCategory: 'UtilitiesApplication',
+    applicationSubCategory: 'GNOME Shell extension',
+    operatingSystem: 'Linux (GNOME Shell 49, 50, 51, Wayland)',
+    description,
+    url: site,
+    downloadUrl: repo,
+    codeRepository: repo,
+    license: 'https://spdx.org/licenses/GPL-2.0-or-later.html',
+    image: `${site}og.png`,
+    screenshot: `${site}media/glide-demo-poster.jpg`,
+    isAccessibleForFree: true,
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'EUR' },
+    author: { '@type': 'Organization', name: 'taulit', url: 'https://github.com/taulit' },
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faq.map(({ q, a }) => ({
+      '@type': 'Question',
+      name: q,
+      acceptedAnswer: { '@type': 'Answer', text: a },
+    })),
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'VideoObject',
+    name: 'Glide: middle-click autoscroll in GNOME',
+    description: 'Autoscroll in Firefox, Files, a text editor and a wide table, and the per-app rules.',
+    thumbnailUrl: `${site}media/glide-demo-poster.jpg`,
+    contentUrl: `${site}media/glide-demo.mp4`,
+    uploadDate: '2026-11-27',
+    duration: 'PT28S',
+  },
+];
+
+const rules = [
+  ['Browsers', 'Firefox, Chrome, Brave, Vivaldi, Edge', 'Their own autoscroll', 'They know links, text fields and web apps'],
+  ['Design and canvas', 'Figma, GIMP, Inkscape, Krita, Penpot, draw.io', 'Off', 'Middle drag pans the canvas'],
+  ['3D and CAD', 'Blender, FreeCAD, KiCad, slicers, Godot', 'Off', 'Middle drag orbits the view'],
+  ['Code editors', 'VS Code, VSCodium, Cursor', 'Off', 'Middle drag makes a box selection'],
+  ['Remote and VMs', 'Boxes, Remmina, virt-manager, Moonlight, RustDesk', 'Off', 'The button belongs to the other machine'],
+  ['Games', 'Steam, Proton, Minecraft, emulators, fullscreen', 'Off', 'Games bind the middle button'],
+  ['Everything else', 'Files, Settings, terminals, GTK, Qt and Electron apps', 'Smart', 'A click stays a click, drag scrolls'],
+];
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={site} />
+    <link rel="icon" href={`${base}favicon.svg`} type="image/svg+xml" />
+    <link rel="sitemap" href={`${base}sitemap-index.xml`} />
+    <meta name="theme-color" content="#111015" />
+    <meta name="keywords" content="autoscroll, middle click scroll, GNOME, Linux, Wayland, GNOME Shell extension, Windows autoscroll on Linux, universal scrolling, mouse" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Glide" />
+    <meta property="og:title" content="Glide: middle-click autoscroll for GNOME" />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={site} />
+    <meta property="og:image" content={`${site}og.png`} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Glide, middle-click autoscroll for GNOME, with its indicator over a table" />
+    <meta property="og:video" content={`${site}media/glide-demo.mp4`} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Glide: middle-click autoscroll for GNOME" />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={`${site}og.png`} />
+
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href={base} aria-label="Glide home">
+        <img src={`${base}favicon.svg`} alt="" width="28" height="28" />
+        <span>Glide</span>
+      </a>
+      <nav>
+        <a href="#how">How it works</a>
+        <a href="#rules">Rules</a>
+        <a href="#install">Install</a>
+        <a href={repo}>GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <p class="eyebrow">GNOME Shell extension · Wayland</p>
+        <h1>Middle-click autoscroll for GNOME</h1>
+        <p class="lede">
+          Press the middle mouse button, move the mouse, and the page scrolls by itself: faster the further you pull.
+          Like on Windows, but it knows where you are. A click stays a click, and apps that use middle drag for
+          something else are left alone.
+        </p>
+        <div class="cta">
+          <a class="button primary" href="#install">Install</a>
+          <a class="button" href={repo}>Source on GitHub</a>
+        </div>
+        <figure class="video">
+          <video
+            autoplay
+            muted
+            loop
+            playsinline
+            preload="metadata"
+            poster={`${base}media/glide-demo-poster.jpg`}
+            width="1600"
+            height="1000"
+            aria-label="Glide autoscrolling in Firefox, Files, a text editor and a wide table, then the per-app rules"
+          >
+            <source src={`${base}media/glide-demo.webm`} type="video/webm" />
+            <source src={`${base}media/glide-demo.mp4`} type="video/mp4" />
+          </video>
+          <figcaption>Recorded in GNOME Shell 51 with Firefox, Files, Text Editor and the Glide settings.</figcaption>
+        </figure>
+      </section>
+
+      <section id="how" class="band">
+        <h2>How it works</h2>
+        <div class="cards">
+          <article>
+            <h3>Hold and drag</h3>
+            <p>Hold the middle button and move the mouse. The view scrolls while you hold it and stops when you let go.</p>
+          </article>
+          <article>
+            <h3>Click to scroll</h3>
+            <p>Press, pause a moment, release. The anchor gets an accent ring and keeps scrolling until you click. Steer with the mouse.</p>
+          </article>
+          <article>
+            <h3>A click stays a click</h3>
+            <p>A short middle click still pastes, opens links in a new tab and closes tabs. Esc, any click or the wheel stops autoscroll.</p>
+          </article>
+          <article>
+            <h3>Every direction</h3>
+            <p>Up, down, sideways and diagonal, with pixel-smooth scrolling like a touchpad, in GTK, Qt, Electron and XWayland apps.</p>
+          </article>
+        </div>
+        <p class="note">
+          The indicator follows the look of modern Linux cursors: a dark body with a white rim, the accent colour of your
+          system, and a small puck on a rubber band that shows how far, and so how fast, you pulled.
+        </p>
+      </section>
+
+      <section id="rules">
+        <h2>Smart about where you are</h2>
+        <p>
+          What a middle press does depends on the app under the pointer. The first rule that matches wins, and the
+          settings list every open window with what Glide would do there and why.
+        </p>
+        <div class="table">
+          <table>
+            <thead><tr><th>Apps</th><th>Examples</th><th>Glide</th><th>Why</th></tr></thead>
+            <tbody>
+              {rules.map(([kind, ex, mode, why]) => (
+                <tr><th scope="row">{kind}</th><td>{ex}</td><td><span class={`mode ${mode === 'Off' ? 'off' : mode === 'Smart' ? 'on' : 'native'}`}>{mode}</span></td><td>{why}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <img class="shot" src={`${base}media/prefs-apps.png`} alt="The Apps page of the Glide settings: open windows with their mode, and the list of rules" width="770" height="950" loading="lazy" />
+      </section>
+
+      <section id="install" class="band">
+        <h2>Install</h2>
+        <p>You need GNOME Shell 49, 50 or 51 on Wayland and Rust (cargo).</p>
+        <pre><code>git clone https://github.com/taulit/glide
+cd glide
+./install.sh --browsers</code></pre>
+        <p>
+          The installer builds the <code>glided</code> daemon, runs it as a systemd user service, installs the extension and
+          switches on the browsers’ own autoscroll. It checks the permissions first; usually you have to join the
+          <code>input</code> group and allow <code>/dev/uinput</code>, then log out and in once. Details are in the{" "}
+          <a href={`${repo}#install`}>README</a>.
+        </p>
+      </section>
+
+      <section id="faq">
+        <h2>Questions</h2>
+        {faq.map(({ q, a }) => (
+          <details>
+            <summary>{q}</summary>
+            <p>{a}</p>
+          </details>
+        ))}
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Glide is free software (GPL-2.0-or-later) by <a href="https://github.com/taulit">taulit</a>.
+        <a href={repo}>Source</a> · <a href={`${repo}/issues`}>Issues</a>
+      </p>
+    </footer>
+  </body>
+</html>
+
+<style is:global>
+  :root {
+    --bg: #fbfaf8;
+    --fg: #17161a;
+    --muted: #625e66;
+    --line: #e5e2dd;
+    --card: #f2f0ec;
+    --accent: #0f8f7a;
+    --accent-fg: #fff;
+    --code: #efece7;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111015;
+      --fg: #eeebe6;
+      --muted: #a29ea6;
+      --line: #2a2830;
+      --card: #19181e;
+      --accent: #5fd4bf;
+      --accent-fg: #0b1d1a;
+      --code: #1d1c22;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 17px/1.6 'Adwaita Sans', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+  .top {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    max-width: 1080px; margin: 0 auto; padding: 18px 20px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; color: var(--fg); text-decoration: none; font-weight: 700; font-size: 19px; }
+  .top nav { display: flex; gap: 20px; flex-wrap: wrap; }
+  .top nav a { color: var(--muted); text-decoration: none; font-size: 15px; }
+  .top nav a:hover { color: var(--fg); }
+  main > section { max-width: 1080px; margin: 0 auto; padding: 56px 20px; }
+  .hero { text-align: center; padding-top: 40px; }
+  .eyebrow { color: var(--accent); font-weight: 600; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; margin: 0; }
+  h1 { font-size: clamp(36px, 6vw, 64px); line-height: 1.05; letter-spacing: -.025em; margin: 14px auto 18px; max-width: 16ch; }
+  .lede { font-size: clamp(17px, 2vw, 20px); color: var(--muted); max-width: 62ch; margin: 0 auto 28px; }
+  .cta { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-bottom: 44px; }
+  .button {
+    display: inline-block; padding: 11px 22px; border-radius: 999px; text-decoration: none; font-weight: 600;
+    border: 1px solid var(--line); color: var(--fg);
+  }
+  .button.primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+  .video { margin: 0; }
+  .video video {
+    width: 100%; height: auto; display: block; border-radius: 14px; background: #000;
+    box-shadow: 0 24px 70px rgb(0 0 0 / .35); border: 1px solid var(--line);
+  }
+  .video figcaption, .note { color: var(--muted); font-size: 14px; margin-top: 12px; }
+  h2 { font-size: clamp(26px, 3.4vw, 36px); letter-spacing: -.015em; margin: 0 0 18px; }
+  .band { border-top: 1px solid var(--line); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+  .cards article { background: var(--card); border-radius: 14px; padding: 20px 22px; }
+  .cards h3 { margin: 0 0 6px; font-size: 18px; }
+  .cards p { margin: 0; color: var(--muted); font-size: 15.5px; }
+  .note { max-width: 70ch; font-size: 15px; margin-top: 22px; }
+  #rules > p { color: var(--muted); max-width: 70ch; }
+  .table { overflow-x: auto; margin: 24px 0 32px; border: 1px solid var(--line); border-radius: 12px; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th { color: var(--muted); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; }
+  tbody tr:last-child > * { border-bottom: 0; }
+  td:nth-child(2), td:nth-child(4) { color: var(--muted); }
+  .mode { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap; background: var(--card); }
+  .mode.on { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--fg); }
+  .mode.off { color: var(--muted); }
+  .shot { display: block; max-width: min(100%, 560px); height: auto; margin: 0 auto; border-radius: 14px; }
+  pre { background: var(--code); border-radius: 12px; padding: 18px 20px; overflow-x: auto; font-size: 15px; line-height: 1.55; }
+  code { font-family: ui-monospace, 'Adwaita Mono', 'JetBrains Mono', monospace; font-size: .92em; }
+  p code { background: var(--code); padding: 1px 6px; border-radius: 6px; }
+  #install p { max-width: 72ch; }
+  details { border-bottom: 1px solid var(--line); padding: 14px 0; max-width: 780px; }
+  summary { cursor: pointer; font-weight: 600; font-size: 17.5px; }
+  details p { color: var(--muted); margin: 10px 0 2px; }
+  footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; text-align: center; padding: 28px 20px 40px; }
+  footer a { color: var(--muted); }
+  @media (max-width: 560px) {
+    .top nav a:not(:last-child) { display: none; }
+    main > section { padding: 40px 16px; }
+  }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>

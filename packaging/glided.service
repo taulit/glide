@@ -1,0 +1,13 @@
+[Unit]
+Description=Glide middle-click autoscroll (input daemon)
+Documentation=https://github.com/taulit/glide
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/glided
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

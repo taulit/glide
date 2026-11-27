@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.glide" path="/org/gnome/shell/extensions/glide/">
+    <key name="enabled" type="b">
+      <default>true</default>
+      <summary>Autoscroll enabled</summary>
+    </key>
+    <key name="default-mode" type="s">
+      <choices>
+        <choice value="smart"/>
+        <choice value="classic"/>
+        <choice value="off"/>
+      </choices>
+      <default>'smart'</default>
+      <summary>Mode for windows no rule matches</summary>
+    </key>
+    <key name="rules" type="s">
+      <default>''</default>
+      <summary>Per-app rules as JSON; empty means the built-in list</summary>
+    </key>
+    <key name="fullscreen-off" type="b">
+      <default>true</default>
+      <summary>Leave fullscreen windows (games, video) alone unless a rule says otherwise</summary>
+    </key>
+    <key name="sensitivity" type="d">
+      <range min="0.1" max="5.0"/>
+      <default>1.0</default>
+      <summary>How far the virtual cursor travels per mouse count</summary>
+    </key>
+    <key name="speed" type="d">
+      <range min="0.1" max="5.0"/>
+      <default>1.0</default>
+      <summary>Scroll speed multiplier</summary>
+    </key>
+    <key name="dead-zone" type="i">
+      <range min="0" max="80"/>
+      <default>14</default>
+      <summary>Distance around the anchor that does not scroll (px)</summary>
+    </key>
+  </schema>
+</schemalist>

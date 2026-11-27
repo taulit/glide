@@ -1,0 +1,17 @@
+[package]
+name = "glided"
+version = "0.1.0"
+edition = "2021"
+description = "Input side of Glide: grabs mice, intercepts the middle button and drives the GNOME Shell extension"
+repository = "https://github.com/taulit/glide"
+license = "GPL-2.0-or-later"
+
+[dependencies]
+evdev = "0.13"
+zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
+libc = "0.2"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

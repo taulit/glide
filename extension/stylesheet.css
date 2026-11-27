@@ -1,0 +1,4 @@
+/* The indicator reads its accent from this colour. */
+.glide-indicator {
+  color: -st-accent-color;
+}
