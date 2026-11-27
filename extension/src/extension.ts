@@ -164,6 +164,10 @@ class Session {
    * Boxes the real cursor in at the anchor with four barriers. glided then passes the mouse
    * motion on as usual, libinput accelerates it like any cursor motion, and Mutter reports
    * each push against a wall with the full delta: the puck moves exactly as the cursor would.
+   *
+   * The walls run across the whole stage (a # around the anchor), not just around the box:
+   * Mutter lets the pointer go when a motion ends past the end of a held barrier, and a fast
+   * diagonal motion would slip past short walls.
    */
   private holdCursor(ax: number, ay: number): boolean {
     const D = Meta.BarrierDirection;
@@ -186,10 +190,11 @@ class Session {
       this.barriers.push(barrier);
     };
     try {
-      wall(ax - 1, ay - 1, ax - 1, ay + 1, D.POSITIVE_X);
-      wall(ax + 1, ay - 1, ax + 1, ay + 1, D.NEGATIVE_X);
-      wall(ax - 1, ay - 1, ax + 1, ay - 1, D.POSITIVE_Y);
-      wall(ax - 1, ay + 1, ax + 1, ay + 1, D.NEGATIVE_Y);
+      const [w, h] = global.stage.get_size();
+      wall(ax - 1, 0, ax - 1, h, D.POSITIVE_X);
+      wall(ax + 1, 0, ax + 1, h, D.NEGATIVE_X);
+      wall(0, ay - 1, w, ay - 1, D.POSITIVE_Y);
+      wall(0, ay + 1, w, ay + 1, D.NEGATIVE_Y);
       return true;
     } catch (e) {
       console.warn(`Glide: cannot hold the cursor with barriers, using raw motion: ${e}`);
