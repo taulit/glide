@@ -94,6 +94,10 @@ class Session {
   private escId = 0;
   private barriers: Meta.Barrier[] = [];
   private lastHit = '';
+  private readonly ax: number;
+  private readonly ay: number;
+  /** Until when the pointer may still be on its way back from a warp, µs. */
+  private warpUntil = 0;
   /** The session reads the motion from barriers around the anchor, not from Move. */
   readonly tracked: boolean;
 
@@ -108,6 +112,8 @@ class Session {
     this.speed = settings.get_double('speed');
     this.dead = settings.get_int('dead-zone');
     const [ax, ay] = global.get_pointer();
+    this.ax = ax;
+    this.ay = ay;
 
     this.indicator = new Indicator(ax, ay, { sticky: kind === 'sticky', deadZone: this.dead });
 
@@ -186,6 +192,23 @@ class Session {
     this.move(event.dx, event.dy);
   }
 
+  /**
+   * Safety net for the barriers: once in a long while the pointer still gets out (it then moves
+   * the hover under it and takes the scroll target along). The motion it got out with goes to
+   * the puck and the pointer goes back to the anchor; the walls let it pass inwards.
+   */
+  private keepHeld(now: number) {
+    if (!this.barriers.length || now < this.warpUntil) return;
+    const [x, y] = global.get_pointer();
+    const dx = x - this.ax;
+    const dy = y - this.ay;
+    if (Math.abs(dx) <= 1.5 && Math.abs(dy) <= 1.5) return;
+    console.warn(`Glide: the cursor got out by ${dx},${dy}, putting it back`);
+    this.move(dx, dy);
+    this.vdev.notify_absolute_motion(now, this.ax, this.ay);
+    this.warpUntil = now + 50_000;
+  }
+
   private releaseCursor() {
     this.barriers.forEach(b => b.destroy());
     this.barriers = [];
@@ -226,6 +249,7 @@ class Session {
     const now = GLib.get_monotonic_time();
     const dt = Math.min(0.05, (now - this.last) / 1e6);
     this.last = now;
+    this.keepHeld(now);
 
     const vx = this.velocity(this.ox);
     const vy = this.velocity(this.oy);
