@@ -33,6 +33,12 @@ export function isMode(value: unknown): value is Mode {
   return MODES.includes(value as Mode);
 }
 
+const CANVAS_SITES =
+  'Figma|FigJam|Excalidraw|tldraw|Miro|Penpot|draw\\.io|diagrams\\.net|Google Maps|Google Earth|Photopea|Canva|Whimsical|Lucidchart|Onshape|Tinkercad|Krita|Kittl|Framer';
+const CANVAS_TITLE = `(^|\\s[-–—|·:]\\s)(${CANVAS_SITES})(\\s[-–—|·:]\\s|$)`;
+/** Title pattern of the canvas rule before it was anchored; saved copies are upgraded. */
+const OLD_CANVAS_TITLE = CANVAS_SITES;
+
 /** Matched case-insensitively against the window's app id, WM class and instance. */
 export const DEFAULT_RULES: readonly Rule[] = [
   {
@@ -40,8 +46,9 @@ export const DEFAULT_RULES: readonly Rule[] = [
     name: 'Canvas web apps in the browser',
     match:
       '^(firefox|firefox-esr|org\\.mozilla\\.firefox|librewolf|zen|floorp|waterfox|google-chrome(-beta|-unstable)?|com\\.google\\.chrome|chromium(-browser)?|org\\.chromium\\.chromium|brave-browser(-beta|-nightly)?|com\\.brave\\.browser|vivaldi(-stable)?|microsoft-edge(-stable|-beta|-dev)?|opera|thorium-browser|helium)$',
-    title:
-      'Figma|FigJam|Excalidraw|tldraw|Miro|Penpot|draw\\.io|diagrams\\.net|Google Maps|Google Earth|Photopea|Canva|Whimsical|Lucidchart|Onshape|Tinkercad|Krita|Kittl|Framer',
+    // The site name as its own part of the title ("File – Figma", "Excalidraw | …"), not just
+    // the word somewhere: a page that mentions Figma is not Figma.
+    title: CANVAS_TITLE,
     mode: 'native',
   },
   {
@@ -117,7 +124,10 @@ export function parseRules(json: string): Rule[] {
   if (!json) return cloneDefaults();
   try {
     const rules: unknown = JSON.parse(json);
-    if (Array.isArray(rules)) return rules.filter(isRule);
+    if (Array.isArray(rules))
+      return rules
+        .filter(isRule)
+        .map(r => (r.title === OLD_CANVAS_TITLE ? { ...r, title: CANVAS_TITLE } : r));
   } catch (e) {
     console.warn(`Glide: invalid rules JSON, using defaults: ${e}`);
   }
